@@ -1,15 +1,17 @@
 import os
 import sys
 import subprocess
+import shutil
 
 # =============================================================================
-# GENERADOR PROCEDURAL DE TERRENOS — Punto de entrada principal
+# GENERADOR PROCEDURAL DE TERRENOS — Punto de entrada principal (Versión 2)
 # Proyecto Final - Teoria de la Computacion (UACH)
 #
-# Uso: python main.py
+# Uso: python main2.py
 # =============================================================================
 
 DIRECTORIO = os.path.dirname(os.path.abspath(__file__))
+# Cambiamos las rutas para que agarre tus archivos clonados
 GRAMATICA  = os.path.join(DIRECTORIO, "terreno.gic")
 METACOMP   = os.path.join(DIRECTORIO, "metacompilador_terreno.py")
 PARSER     = os.path.join(DIRECTORIO, "parser_terreno.py")
@@ -26,6 +28,11 @@ BLENDER_PATHS = [
 ]
 
 def encontrar_blender():
+    # shutil.which busca en el PATH del sistema (la forma correcta en Linux)
+    if shutil.which("blender"):
+        return "blender"
+        
+    # Respaldo para Windows por si tu compa lo corre allá
     for ruta in BLENDER_PATHS:
         if os.path.isfile(ruta):
             return ruta
@@ -34,15 +41,17 @@ def encontrar_blender():
 def encabezado():
     print("")
     print("=" * 52)
-    print("   GENERADOR PROCEDURAL DE TERRENOS")
+    print("   GENERADOR PROCEDURAL DE TERRENOS V2")
     print("   Teoria de la Computacion - UACH")
     print("=" * 52)
     print("   Gramatica del DSL:")
-    print("     S -> T(V,A)")
-    print("     T -> m | v | l    (Montana, Valle, Llanura)")
-    print("     V -> e | s        (Extrema, Suave)")
-    print("     A -> c | a        (Con agua, Arido)")
-    print("   Ejemplo: m(e,c) = Montana Extrema Con Agua")
+    print("     S -> T(R,A)")
+    print("     T -> m | v | l | h | k | p | d (Biomas)")
+    print("     R -> E | U                     (Relieve)")
+    print("     E -> eE | e                    (Extrema recursiva)")
+    print("     U -> sU | s                    (Suave recursiva)")
+    print("     A -> c | a                     (Con agua, Arido)")
+    print("   Ejemplo: k(ee,a) = Canones Muy Extremos Aridos")
     print("=" * 52)
     print("")
 
@@ -56,16 +65,17 @@ def paso1_generar_parser():
         print("    ERROR al generar el parser:")
         print(resultado.stderr)
         sys.exit(1)
-    print("    Parser generado: parser_terreno.py")
+    print(f"    Parser generado: {os.path.basename(PARSER)}")
 
 def paso2_pedir_codigo():
     print("")
     print("[2/3] Ingresa el codigo de terreno.")
-    print("      Formato : bioma(variante,agua)")
+    print("      Formato : bioma(relieve,agua)")
     print("      bioma   : m=Montana  v=Valle  l=Llanura")
-    print("      variante: e/ee/eee/... o s/ss/sss/...")
+    print("                h=Colinas  k=Canones p=Meseta d=Dunas")
+    print("      relieve : e/ee/eee/... o s/ss/sss/...")
     print("      agua    : c=Con agua  a=Arido")
-    print("      Ejemplos: m(e,c)  m(eee,c)  v(ss,a)  l(s,c)")
+    print("      Ejemplos: k(ee,a)  p(s,c)  h(ss,a)  d(e,a)")
     print("")
     while True:
         codigo = input("    Codigo: ").strip().replace(" ", "")
@@ -100,8 +110,7 @@ def paso4_abrir_blender(nombre_script):
         print("=" * 52)
         print("  Blender no encontrado automaticamente.")
         print("  Corre manualmente:")
-        print('  "C:\\Program Files\\Blender Foundation\\Blender 5.1\\blender.exe"')
-        print("  --python " + ruta_script)
+        print('  blender --python ' + ruta_script)
         print("=" * 52)
         return
 

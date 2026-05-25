@@ -45,14 +45,15 @@ def parse():
 # --- Tablas de acciones semanticas ---
 # escala_ruido: frecuencia del ruido (menor = formas mas anchas y naturales)
 # amplitud_base: altura maxima del terreno en unidades de Blender
+# Formato: Nombre, Amplitud, Escala, Color RGBA
 BIOMA = {
-    'm': ('Montana',  10.0, 0.20),
-    'v': ('Valle',     3.5, 0.15),
-    'l': ('Llanura',   1.2, 0.10),
-    'h': ('Colinas',   5.0, 0.35),
-    'k': ('Canones',   8.0, 0.20),
-    'p': ('Meseta',   12.0, 0.15),
-    'd': ('Dunas',     2.5, 0.60),
+    'm': ('Montana',  10.0, 0.20, "(0.072, 0.068, 0.068, 1.0)"), # Basalt
+    'v': ('Valle',     3.5, 0.15, "(0.076, 0.091, 0.024, 1.0)"), # Green Terracota (#4E552C)
+    'l': ('Llanura',   1.2, 0.10, "(0.156, 0.371, 0.045, 1.0)"), # Grass
+    'h': ('Colinas',   5.0, 0.35, "(0.266, 0.042, 0.026, 1.0)"), # Red Terracota
+    'k': ('Canones',   8.0, 0.20, "(0.019, 0.008, 0.003, 1.0)"), # Sustituto White Terracota (#251710)
+    'p': ('Meseta',   12.0, 0.15, "(0.352, 0.130, 0.059, 1.0)"), # Terracota
+    'd': ('Dunas',     2.5, 0.60, "(0.701, 0.246, 0.000, 1.0)"), # Color extraido (#DA8900)
 }
 VARIANTE = {
     'e': ('Extrema', 1.0),
@@ -64,8 +65,8 @@ AGUA = {
 }
 
 def generar_script_blender(bioma, variante, agua):
-    nombre_bioma, amplitud_base, escala = BIOMA[bioma]
-    nombre_agua,  tiene_agua            = AGUA[agua]
+    nombre_bioma, amplitud_base, escala, color_bioma = BIOMA[bioma]
+    nombre_agua,  tiene_agua                         = AGUA[agua]
 
     # Calcular multiplicador segun la cantidad de letras en variante
     # Base 1.0, cada letra extra suma 0.15
@@ -160,7 +161,7 @@ def generar_script_blender(bioma, variante, agua):
         "mat.use_nodes = True",
         "bsdf = mat.node_tree.nodes.get('Principled BSDF')",
         "if bsdf:",
-        "    bsdf.inputs['Base Color'].default_value = (0.50, 0.48, 0.45, 1.0)",
+        "    bsdf.inputs['Base Color'].default_value = " + color_bioma + "",
         "    bsdf.inputs['Roughness'].default_value = 0.9",
         "obj.data.materials.append(mat)",
     ]
@@ -180,6 +181,16 @@ def generar_script_blender(bioma, variante, agua):
             "bpy.context.active_object.data.materials.append(mat_agua)",
             "bpy.context.scene.world = None",
         ]
+
+    lineas += [
+        "",
+        "# 7. Forzar vista a Modo Material",
+        "for area in bpy.context.screen.areas:",
+        "    if area.type == 'VIEW_3D':",
+        "        for space in area.spaces:",
+        "            if space.type == 'VIEW_3D':",
+        "                space.shading.type = 'MATERIAL'"
+    ]
 
     nombre_archivo = "terreno_" + bioma + variante + agua + ".py"
     with open(nombre_archivo, "w") as f:

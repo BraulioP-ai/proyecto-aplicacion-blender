@@ -1,0 +1,6 @@
+S -> T(R,A)
+T -> m | v | l | h | k | p | d
+R -> E | U
+E -> eE | e
+U -> sU | s
+A -> c | a

@@ -4,10 +4,10 @@ import subprocess
 import shutil
 
 # =============================================================================
-# GENERADOR PROCEDURAL DE TERRENOS — Punto de entrada principal (Versión 2)
+# GENERADOR PROCEDURAL DE TERRENOS — Punto de entrada principal
 # Proyecto Final - Teoria de la Computacion (UACH)
 #
-# Uso: python main2.py
+# Uso: python main.py
 # =============================================================================
 
 DIRECTORIO = os.path.dirname(os.path.abspath(__file__))
@@ -53,10 +53,9 @@ def encabezado():
     print("     A -> c | a                     (Con agua, Arido)")
     print("   Ejemplo: k(ee,a) = Canones Muy Extremos Aridos")
     print("=" * 52)
-    print("")
 
 def paso1_generar_parser():
-    print("[1/3] Leyendo gramatica y generando parser...")
+    print("\n[1/3] Leyendo gramatica y generando parser...")
     resultado = subprocess.run(
         [PYTHON, METACOMP, GRAMATICA, PARSER],
         capture_output=True, text=True
@@ -84,15 +83,17 @@ def paso2_pedir_codigo():
         print("    Escribe un codigo valido.")
 
 def paso3_ejecutar_parser(codigo):
-    print("")
-    print("[3/3] Validando codigo y generando script de Blender...")
+    print("\n[3/3] Validando codigo y generando script de Blender...")
     resultado = subprocess.run(
         [PYTHON, PARSER],
         input=codigo,
         capture_output=True, text=True
     )
     salida = resultado.stdout
-    print(salida)
+    
+    # Filtramos la salida del parser para no imprimir el menu doble en la consola
+    lineas_limpias = [linea for linea in salida.splitlines() if not ("Generador Procedural" in linea or "Formato:" in linea or "->" in linea or "Ejemplos :" in linea or "cada letra extra" in linea)]
+    print("\n" + "\n".join(lineas_limpias).strip())
 
     if "invalido" in salida.lower():
         return None
@@ -114,14 +115,14 @@ def paso4_abrir_blender(nombre_script):
         print("=" * 52)
         return
 
-    print("Abriendo Blender...")
+    print("\nAbriendo Blender...")
     subprocess.run([blender, "--python", ruta_script])
 
 def main():
-    encabezado()
     paso1_generar_parser()
 
     while True:
+        encabezado()
         codigo        = paso2_pedir_codigo()
         nombre_script = paso3_ejecutar_parser(codigo)
 
@@ -134,8 +135,7 @@ def main():
         else:
             print("    Codigo invalido, intenta de nuevo.")
 
-    print("")
-    print("Proyecto terminado.")
+    print("\nProyecto terminado.")
 
 if __name__ == "__main__":
     main()

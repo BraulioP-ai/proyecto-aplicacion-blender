@@ -15,17 +15,19 @@ El flujo tiene tres etapas:
 
 1. **`terreno.gic`** define la gramática del DSL (tipo Chomsky libre de contexto).
 2. **`metacompilador_terreno.py`** lee la gramática y genera el archivo `parser_terreno.py`.
-3. **`parser_terreno.py`** valida tu código de terreno y genera un script `.py` listo para Blender.
-4. **Blender** ejecuta ese script y construye el terreno con ruido de Perlin, materiales dinámicos y agua opcional.
+3. **`parser_terreno.py`** valida tu código de terreno (sintáctica y semánticamente) y genera un script `.py` listo para Blender.
+4. **Blender** ejecuta ese script y construye el terreno con geometría avanzada (BMesh), materiales dinámicos y agua procedural.
 
 ### Gramática del DSL
 
     S -> T(R,A)
-    T -> m | v | l | h | k | p | d  (Montana, Valle, Llanura, Colinas, Cañones, Meseta, Dunas)
+    T -> m | v | l | k | d          (Montaña, Valle, Llanura, Cañones, Dunas)
     R -> E | U                      (Relieve)
     E -> eE | e                     (Extrema recursiva)
     U -> sU | s                     (Suave recursiva)
     A -> c | a                      (Con agua, Arido)
+
+**Nota Semántica:** El parser incluye validaciones lógicas según el bioma. Por ejemplo, la Llanura (`l`) solo admite relieve suave (`s`), y las Dunas (`d`) solo admiten terreno árido (`a`).
 
 ### Ejemplos de códigos
 
@@ -33,11 +35,11 @@ El flujo tiene tres etapas:
 |-------------|--------------------------------------|
 | `m(e,c)`    | Montaña extrema con agua             |
 | `k(ee,a)`   | Cañones muy extremos áridos          |
-| `v(ss,a)`   | Valle muy suave árido                    |
-| `p(s,c)`    | Meseta suave con agua                |
+| `v(ss,a)`   | Valle muy suave árido                |
+| `l(s,c)`    | Llanura suave con agua               |
 | `d(e,a)`    | Dunas extremas áridas                |
 
-Cada letra extra en la variante (`ee`, `eee`, `ss`...) aumenta la intensidad del terreno en ±0.15 (multiplicador acumulativo sobre la amplitud base).
+Cada letra extra en la variante (`ee`, `eee`, `ss`...) aumenta o disminuye la intensidad del relieve (multiplicador acumulativo sobre la amplitud base).
 
 ---
 

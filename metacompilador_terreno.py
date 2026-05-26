@@ -1,9 +1,14 @@
 import sys, os
 
 # =============================================================================
-# METACOMPILADOR DE TERRENOS v2
+# METACOMPILADOR DE TERRENOS v3
 # Fork de compilador_gic.py (base del profe)
 # Proyecto Final - Teoria de la Computacion (UACH)
+#
+# CAMBIOS respecto al original:
+#   - Integración de mallas complejas procedurales (Ríos y Lagos vía BMesh)
+#   - Validaciones semánticas integradas en el Parser generado
+#   - Paleta de color sRGB-Linear
 # =============================================================================
 
 def main():
@@ -20,34 +25,42 @@ def main():
         parse()
 
 
+# -----------------------------------------------------------------------------
+# parse() — lee el archivo .gic y construye el programa generado
+# MODIFICADO: la variable `programa` ahora contiene las acciones semanticas
+# -----------------------------------------------------------------------------
 def parse():
     global programa
 
+    # --- INICIO DEL BLOQUE MODIFICADO ---
+    # Este es el codigo que se inyecta al inicio del archivo generado.
     programa = """
 # =============================================================
-# Parser de Terrenos v2 - generado por metacompilador_terreno.py
+# Parser de Terrenos v3 - generado por metacompilador_terreno.py
 # =============================================================
 
+# --- Tablas de acciones semanticas ---
+# escala_ruido: frecuencia del ruido (menor = formas mas anchas y naturales)
+# amplitud_base: altura maxima del terreno en unidades de Blender
+# Formato: Nombre, Amplitud, Escala, Color RGBA (Minecraft Lineal)
 BIOMA = {
-    'm': ('Montana',  10.0, 0.20),
-    'v': ('Valle',     3.5, 0.15),
-    'l': ('Llanura',   4.0, 0.25),
-    'k': ('Canones',  10.0, 0.18),
-    'd': ('Dunas',     2.0, 0.00),
+    'm': ('Montana',  10.0, 0.20, "(0.072, 0.068, 0.068, 1.0)"), # Basalt
+    'v': ('Valle',     3.5, 0.15, "(0.076, 0.091, 0.024, 1.0)"), # Green Terracota
+    'l': ('Llanura',   4.0, 0.25, "(0.156, 0.371, 0.045, 1.0)"), # Grass
+    'k': ('Canones',  10.0, 0.18, "(0.019, 0.008, 0.003, 1.0)"), # Black Terracota
+    'd': ('Dunas',     2.0, 0.00, "(0.701, 0.246, 0.000, 1.0)"), # Sand
 }
 AGUA = {
     'c': ('Con Agua', True),
     'a': ('Arido',    False),
 }
 
-# Biomas que no admiten agua
+# Restricciones semanticas de diseño
 SIN_AGUA = {'d'}
-# Biomas que no admiten variante extrema
-SOLO_SUAVE = {'l'}
 
 def generar_script_blender(bioma, variante, agua):
-    nombre_bioma, amplitud_base, escala = BIOMA[bioma]
-    nombre_agua,  tiene_agua            = AGUA[agua]
+    nombre_bioma, amplitud_base, escala, color_bioma = BIOMA[bioma]
+    nombre_agua,  tiene_agua                         = AGUA[agua]
 
     letra_v      = variante[0]
     repeticiones = len(variante)
@@ -60,17 +73,17 @@ def generar_script_blender(bioma, variante, agua):
 
     amplitud   = round(amplitud_base * multiplicador, 2)
 
-    # Canones: el modificador s no debe reducir tanto la altura
+    # Canones: el modificador s no debe reducir tanto la altura de las paredes rocosas
     if bioma == 'k' and letra_v == 's':
         amplitud = round(amplitud_base * max(0.75, multiplicador), 2)
-    # Llanura: siempre tiene algo de ondulacion, nunca perfectamente plana
+    # Llanura: siempre tiene algo de ondulacion minima
     if bioma == 'l':
         amplitud = round(max(1.8, amplitud), 2)
 
     nivel_agua = round(amplitud * 0.45, 2)
     suelo      = nivel_agua if tiene_agua else 0.0
 
-    # Parametros de valle
+    # Parametros matematicos del Valle
     ALTURA_MONTANA_VALLE = 15.0 if letra_v == 'e' else 8.0
     inicio_m = 0.15 if letra_v == 'e' else 0.50
     rango_m  = round(1.0 - inicio_m, 2)
@@ -151,22 +164,18 @@ def generar_script_blender(bioma, variante, agua):
 
     # --------------------------------------------------------------- CANONES
     elif bioma == 'k':
-        # e = canon estrecho con paredes mas texturizadas
-        # s = canon ancho con paredes mas suaves
         ancho_canon = 3.5 if letra_v == 'e' else 6.0
         detalle_pared = 0.55 if letra_v == 'e' else 0.20
         lineas += [
-            "# 3. Canon: plateau rocoso con corte e irregular por el centro",
+            "# 3. Canon: plateau rocoso con corte irregular por el centro",
             "ancho_canon = " + str(ancho_canon),
             "detalle_pared = " + str(detalle_pared),
             "for v in obj.data.vertices:",
             "    x = v.co.x",
             "    y = v.co.y",
-            "    # Plateau con doble capa de ruido para textura rocosa",
             "    rb1 = (mathutils.noise.noise(mathutils.Vector((x*0.18, y*0.18, 0.0))) + 1.0) / 2.0",
             "    rb2 = (mathutils.noise.noise(mathutils.Vector((x*0.50, y*0.50, 5.0))) + 1.0) / 2.0",
             "    base = amplitud * (0.60 + 0.28 * rb1 + 0.12 * rb2)",
-            "    # Canon con camino ligeramente sinuoso",
             "    warp = mathutils.noise.noise(mathutils.Vector((y*0.15, 0.0, 8.0))) * 1.8",
             "    x_c = x + warp",
             "    var_w = 1.0 + mathutils.noise.noise(mathutils.Vector((y*0.22, 0.0, 3.0))) * 0.30",
@@ -174,7 +183,6 @@ def generar_script_blender(bioma, variante, agua):
             "    dist_c = abs(x_c)",
             "    if dist_c < ancho_local:",
             "        t = 1.0 - (dist_c / ancho_local)",
-            "        # Detalle de pared: e=mas rugoso, s=mas liso",
             "        pared_n = (mathutils.noise.noise(mathutils.Vector((x*0.6, y*0.5, 2.0))) + 1.0) / 2.0",
             "        profundidad = (t ** 1.2) * amplitud * 0.84 * (1.0 - detalle_pared + detalle_pared * pared_n)",
             "        v.co.z = max(suelo, base - profundidad)",
@@ -184,12 +192,10 @@ def generar_script_blender(bioma, variante, agua):
 
     # --------------------------------------------------------------- DUNAS
     elif bioma == 'd':
-        # e = dunas mas altas y separadas (desierto de arena profundo)
-        # s = dunas bajas y muy suaves (zona costera o desierto joven)
         frec_duna  = 0.45 if letra_v == 'e' else 0.65
         frec_duna2 = 0.75 if letra_v == 'e' else 1.10
         lineas += [
-            "# 3. Dunas: seno con domain warping, forma segun variante",
+            "# 3. Dunas: seno con domain warping, ondas de viento complejas",
             "frec1 = " + str(frec_duna),
             "frec2 = " + str(frec_duna2),
             "for v in obj.data.vertices:",
@@ -210,27 +216,23 @@ def generar_script_blender(bioma, variante, agua):
     # --------------------------------------------------------------- MONTANA
     else:
         if letra_v == 'e':
-            # Montana extrema: Perlin directo, picos agudos y escarpados
             lineas += [
-                "# 3. Montana extrema: Perlin directo con picos agudos",
+                "# 3. Montana extrema: Perlin directo con picos escarpados",
                 "for v in obj.data.vertices:",
                 "    x = v.co.x * escala_ruido",
                 "    y = v.co.y * escala_ruido",
                 "    valor = mathutils.noise.noise(mathutils.Vector((x, y, 0.0)))",
                 "    norm = (valor + 1.0) / 2.0",
-                "    # Exponente > 1 acentua los picos y profundiza los valles",
                 "    v.co.z = max(suelo, (norm ** 1.4) * amplitud)",
             ]
         else:
-            # Montana suave: cimas redondeadas (montana antigua/erosionada)
             lineas += [
-                "# 3. Montana suave: cimas redondeadas como montana erosionada",
+                "# 3. Montana suave: cimas redondeadas como colinas erosionadas antiguas",
                 "for v in obj.data.vertices:",
                 "    x = v.co.x * escala_ruido",
                 "    y = v.co.y * escala_ruido",
                 "    valor = mathutils.noise.noise(mathutils.Vector((x, y, 0.0)))",
                 "    norm = (valor + 1.0) / 2.0",
-                "    # Exponente < 1 aplana las cimas y suaviza la forma",
                 "    v.co.z = max(suelo, (norm ** 0.60) * amplitud)",
             ]
 
@@ -261,24 +263,24 @@ def generar_script_blender(bioma, variante, agua):
         "",
         "bpy.ops.object.shade_smooth()",
         "",
-        "# 5. Material del terreno",
+        "# 5. Material del terreno (Paleta Minecraft)",
         "mat = bpy.data.materials.new(name='Terreno')",
         "mat.use_nodes = True",
         "bsdf = mat.node_tree.nodes.get('Principled BSDF')",
         "if bsdf:",
-        "    bsdf.inputs['Base Color'].default_value = (0.50, 0.48, 0.45, 1.0)",
+        "    bsdf.inputs['Base Color'].default_value = " + color_bioma + "",
         "    bsdf.inputs['Roughness'].default_value = 0.9",
         "obj.data.materials.append(mat)",
     ]
 
-    # ----------------------------------------------------------- AGUA / BIOMA
+    # ----------------------------------------------------------- AGUA AVANZADA
     if tiene_agua:
         if bioma == 'k':
             nivel_rio_k = round(suelo + 0.20, 2)
             lineas += [
                 "",
-                "# 6. Rio en el fondo del canon",
-                "nivel_rio_k = " + str(nivel_rio_k),  # encima del piso del canon
+                "# 6. Rio en el fondo del canon (Sigue el cauce sinuoso)",
+                "nivel_rio_k = " + str(nivel_rio_k),
                 "import math as _mk",
                 "verts_rk = []",
                 "faces_rk = []",
@@ -287,9 +289,8 @@ def generar_script_blender(bioma, variante, agua):
                 "for i in range(pasos_k + 1):",
                 "    t = i / pasos_k",
                 "    y = -10.0 + t * 20.0",
-                "    # El rio sigue el mismo warp sinuoso del canon",
                 "    warp_r = mathutils.noise.noise(mathutils.Vector((y*0.15, 0.0, 8.0))) * 1.8",
-                "    x_c = 0.0 - warp_r",  # negativo para seguir el centro real del canon
+                "    x_c = 0.0 - warp_r",
                 "    verts_rk.append((x_c - ancho_k, y, nivel_rio_k))",
                 "    verts_rk.append((x_c + ancho_k, y, nivel_rio_k))",
                 "for i in range(pasos_k):",
@@ -309,11 +310,10 @@ def generar_script_blender(bioma, variante, agua):
                 "obj_rk.data.materials.append(mat_rk)",
             ]
         elif bioma == 'v' and letra_v == 'e':
-            # Valle extremo con agua: rio estrecho en el fondo (no lago)
             nivel_rio_v = round(suelo + 0.20, 2)
             lineas += [
                 "",
-                "# 6. Rio en el fondo del valle estrecho",
+                "# 6. Rio en el fondo del valle estrecho (Estilo alpino)",
                 "nivel_rio_v = " + str(nivel_rio_v),
                 "import math as _mv",
                 "verts_rv = []",
@@ -346,7 +346,7 @@ def generar_script_blender(bioma, variante, agua):
             nivel_lago = round(suelo + 0.30, 2)
             lineas += [
                 "",
-                "# 6. Lago irregular en el centro del valle",
+                "# 6. Lago irregular en el centro del valle (BMesh interactivo)",
                 "nivel_lago = " + str(nivel_lago),
                 "bpy.ops.mesh.primitive_circle_add(vertices=48, radius=3.2, fill_type='TRIFAN', location=(0, 0, nivel_lago))",
                 "lago_obj = bpy.context.active_object",
@@ -405,10 +405,9 @@ def generar_script_blender(bioma, variante, agua):
                 "obj_rio.data.materials.append(mat_rio)",
             ]
         else:
-            # Montana y Colinas con agua: plano completo
             lineas += [
                 "",
-                "# 6. Plano de agua",
+                "# 6. Plano de agua estatico (Montanas)",
                 "nivel_agua = " + str(nivel_agua),
                 "bpy.ops.mesh.primitive_plane_add(size=19.9, location=(0, 0, nivel_agua + 0.05))",
                 "mat_agua = bpy.data.materials.new(name='Agua')",
@@ -420,6 +419,16 @@ def generar_script_blender(bioma, variante, agua):
                 "bpy.context.active_object.data.materials.append(mat_agua)",
                 "bpy.context.scene.world = None",
             ]
+
+    lineas += [
+        "",
+        "# 7. Forzar vista a Modo Material",
+        "for area in bpy.context.screen.areas:",
+        "    if area.type == 'VIEW_3D':",
+        "        for space in area.spaces:",
+        "            if space.type == 'VIEW_3D':",
+        "                space.shading.type = 'MATERIAL'"
+    ]
 
     nombre_archivo = "terreno_" + bioma + variante + agua + ".py"
     with open(nombre_archivo, "w") as f:
@@ -444,15 +453,15 @@ def main():
     global w
     global p
     print("")
-    print("  Generador Procedural de Terrenos v2")
-    print("  Formato: bioma(relieve,agua)")
-    print("    bioma   -> m=Montana  v=Valle   l=Llanura")
-    print("               h=Colinas  k=Canones p=Meseta  d=Dunas")
-    print("    relieve -> e/ee/eee=Extrema  s/ss/sss=Suave")
+    print("  Generador Procedural de Terrenos v3")
+    print("  Formato: bioma(variante,agua)")
+    print("    bioma   -> m=Montana  v=Valle   l=Llanura  k=Canones  d=Dunas")
+    print("    variante-> e/ee/eee=Extrema  s/ss/sss=Suave")
+    print("               cada letra extra suma intensidad (+0.15)")
     print("    agua    -> c=Con agua  a=Arido")
     print("  Nota: d solo admite arido (a)")
     print("        l solo admite relieve suave (s)")
-    print("  Ejemplos: m(e,c)  v(ss,a)  l(s,c)  k(ee,a)  d(e,a)")
+    print("  Ejemplos : m(e,c)   v(ss,a)   l(s,c)   k(ee,a)   d(e,a)")
     print("")
     w = input("Codigo de terreno: ")
     w = w.replace(" ", "")
@@ -463,15 +472,15 @@ def main():
 def parse():
     if S() and w[p] == "\\n":
         print("Codigo valido.")
-        bioma    = w[0]
+        bioma = w[0]
         inicio_v = 2
-        fin_v    = w.index(',', inicio_v)
+        fin_v = w.index(',', inicio_v)
         variante = w[inicio_v:fin_v]
         inicio_a = fin_v + 1
-        fin_a    = w.index(')', inicio_a)
-        agua     = w[inicio_a:fin_a]
+        fin_a = w.index(')', inicio_a)
+        agua = w[inicio_a:fin_a]
 
-        # --- Validaciones semanticas ---
+        # --- VALIDACIONES SEMÁNTICAS (FILTRO DE BLINDAJE V3) ---
         letra_v      = variante[0]
         repeticiones = len(variante)
         if bioma == 'l' and letra_v == 'e':
@@ -489,12 +498,12 @@ def parse():
             print("")
             print("Error semantico: Montana (m) admite maximo ss en variante suave.")
             print("Con mas de ss el terreno pierde las caracteristicas de una montana.")
-            print("Usa m(s,?) o m(ss,?) para montanas suaves/antiguas.")
+            print("Usa m(s,?) o m(ss,?) para montanas suaves.")
             return
         if bioma == 'd' and letra_v == 'e' and repeticiones > 1:
             print("")
             print("Error semantico: Dunas (d) admite maximo e simple en variante extrema.")
-            print("Las dunas son por definicion de baja altura y formas suaves.")
+            print("Las dunas de arena se deforman de manera sutil.")
             print("Usa d(e,a) o d(s,a) o d(ss,a).")
             return
 
@@ -503,7 +512,6 @@ def parse():
         print("Codigo invalido. Formato esperado: [m/v/l/k/d]([e.../s...],[c/a])")
 
 """
-    # --- FIN DEL BLOQUE MODIFICADO ---
 
     result = S(1)
     file.close()
@@ -520,7 +528,7 @@ def parse():
 
 
 # =============================================================================
-# TODO LO SIGUIENTE ES IDENTICO AL COMPILADOR BASE DEL PROFE
+# LO SIGUIENTE ES IDENTICO AL COMPILADOR BASE
 # =============================================================================
 
 def S(i: int) -> bool:

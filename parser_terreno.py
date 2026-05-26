@@ -1,40 +1,4 @@
-import sys, os
 
-# =============================================================================
-# METACOMPILADOR DE TERRENOS v3
-# Fork de compilador_gic.py (base del profe)
-# Proyecto Final - Teoria de la Computacion (UACH)
-#
-# CAMBIOS respecto al original:
-#   - Integración de mallas complejas procedurales (Ríos y Lagos vía BMesh)
-#   - Validaciones semánticas integradas en el Parser generado
-#   - Paleta de color sRGB-Linear
-# =============================================================================
-
-def main():
-    if len(sys.argv) != 3:
-        print("USO:", sys.argv[0], "entrada salida", file=sys.stderr)
-        exit(1)
-    global file
-    try:
-        file = open(sys.argv[1], "r")
-    except Exception as e:
-        print(str(e), file=sys.stderr)
-        exit(1)
-    else:
-        parse()
-
-
-# -----------------------------------------------------------------------------
-# parse() — lee el archivo .gic y construye el programa generado
-# MODIFICADO: la variable `programa` ahora contiene las acciones semanticas
-# -----------------------------------------------------------------------------
-def parse():
-    global programa
-
-    # --- INICIO DEL BLOQUE MODIFICADO ---
-    # Este es el codigo que se inyecta al inicio del archivo generado.
-    programa = """
 # =============================================================
 # Parser de Terrenos v3 - generado por metacompilador_terreno.py
 # =============================================================
@@ -42,7 +6,7 @@ def parse():
 # --- Tablas de acciones semanticas ---
 # escala_ruido: frecuencia del ruido (menor = formas mas anchas y naturales)
 # amplitud_base: altura maxima del terreno en unidades de Blender
-# Formato: Nombre, Amplitud, Escala, Color RGBA Lineal
+# Formato: Nombre, Amplitud, Escala, Color RGBA (Minecraft Lineal)
 BIOMA = {
     'm': ('Montana',  10.0, 0.20, "(0.072, 0.068, 0.068, 1.0)"), # Basalt
     'v': ('Valle',     3.5, 0.15, "(0.076, 0.091, 0.024, 1.0)"), # Green Terracota
@@ -263,7 +227,7 @@ def generar_script_blender(bioma, variante, agua):
         "",
         "bpy.ops.object.shade_smooth()",
         "",
-        "# 5. Material del terreno (Colores)",
+        "# 5. Material del terreno (Paleta Minecraft)",
         "mat = bpy.data.materials.new(name='Terreno')",
         "mat.use_nodes = True",
         "bsdf = mat.node_tree.nodes.get('Principled BSDF')",
@@ -432,7 +396,7 @@ def generar_script_blender(bioma, variante, agua):
 
     nombre_archivo = "terreno_" + bioma + variante + agua + ".py"
     with open(nombre_archivo, "w") as f:
-        f.write("\\n".join(lineas))
+        f.write("\n".join(lineas))
 
     print("")
     print("=" * 52)
@@ -465,12 +429,12 @@ def main():
     print("")
     w = input("Codigo de terreno: ")
     w = w.replace(" ", "")
-    w += "\\n"
+    w += "\n"
     p = 0
     parse()
 
 def parse():
-    if S() and w[p] == "\\n":
+    if S() and w[p] == "\n":
         print("Codigo valido.")
         bioma = w[0]
         inicio_v = 2
@@ -511,174 +475,139 @@ def parse():
     else:
         print("Codigo invalido. Formato esperado: [m/v/l/k/d]([e.../s...],[c/a])")
 
-"""
 
-    result = S(1)
-    file.close()
-    if result:
-        print("Ok")
-        programa += "main()"
-        with open(sys.argv[2], "w") as salida:
-            salida.write(programa)
-        os.system("python3 " + sys.argv[2])
-        exit(0)
-    else:
-        print("Fail")
-        exit(1)
-
-
-# =============================================================================
-# LO SIGUIENTE ES IDENTICO AL COMPILADOR BASE
-# =============================================================================
-
-def S(i: int) -> bool:
-    return PS(i)
-
-def PS(i: int) -> bool:
-    if(P(i)): return P1(i)
-    return False
-
-def P1(i: int) -> bool:
-    token = next_token()
-    if token['type'] == 'endl':
-        token = next_token()
-        unget_token(token)
-        if token['type'] == 'n': return PS(i)
-        return True
-    elif token['type'] == 'endf': return True
-    else:
-        unget_token(token)
-        return False
-
-def P(i: int) -> bool:
-    global programa
-    token = next_token()
-    if token['type'] == 'n':
-        token2 = next_token()
-        if token2['type'] == 'f':
-            programa += """
-def """ + token['lexema'] + """() -> bool:
+def S() -> bool:
     global p
-"""
-            if DS(i):
-                programa += """
-    return False
-"""
-                return True
-    unget_token(token)
+    t1 = p
+    if T():
+        t2 = p
+        c = w[p]
+        p += 1
+        if c == '(':
+            t3 = p
+            if R():
+                t4 = p
+                c = w[p]
+                p += 1
+                if c == ',':
+                    t5 = p
+                    if A():
+                        t6 = p
+                        c = w[p]
+                        p += 1
+                        if c == ')':
+                            return True
+                        p = t6
+                    p = t5
+                p = t4
+            p = t3
+        p = t2
+    p = t1
+
     return False
 
-def DS(i: int) -> bool:
-    if (D(i)): return D1(i)
-    return False
-
-def D1(i: int) -> bool:
-    token = next_token()
-    if token['type'] == 'o':
-        return DS(i)
-    unget_token(token)
-    return True
-
-def D(i: int) -> bool:
-    global programa
-    token = next_token()
-    if token['type'] == 'n':
-        programa += "    "*i + "t"+str(i)+" = p\n"
-        programa += "    "*i + "if " + token['lexema']+"():\n"
-        token = next_token()
-        unget_token(token)
-        if token['type'] in ['n', 't', 'e']:
-            if D(i+1):
-                programa += "    "*i + "p = t"+str(i)+"\n"
-                return True
-        programa += "    "*(i+1) + "return True\n"
-        programa += "    "*i + "p = t"+str(i)+"\n"
+def T() -> bool:
+    global p
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 'm':
         return True
-    if token['type'] == 't':
-        programa += "    "*i + "t"+str(i)+" = p\n"
-        programa += "    "*i + "c = w[p]\n"
-        programa += "    "*i + "p += 1\n"
-        programa += "    "*i + "if c == '" + token['lexema']+"':\n"
-        token = next_token()
-        unget_token(token)
-        if token['type'] in ['n', 't', 'e']:
-            if D(i+1):
-                programa += "    "*i + "p = t"+str(i)+"\n"
-                return True
-        programa += "    "*(i+1) + "return True\n"
-        programa += "    "*i + "p = t"+str(i)+"\n"
+    p = t1
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 'v':
         return True
-    if token['type'] == 'e':
-        programa += "    "*i + "p = t"+str(i)+"\n"
-        programa += "    "*i + "return True\n"
+    p = t1
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 'l':
         return True
-    unget_token(token)
+    p = t1
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 'k':
+        return True
+    p = t1
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 'd':
+        return True
+    p = t1
+
     return False
 
-def next_token():
-    global file
-    matrix = []
-    #.            '',L,l,|,?,-,\,>,*
-    matrix.append([0,1,2,3,4,5,7,8,8])
-    matrix.append([8,8,8,8,8,8,8,8,8])
-    matrix.append([8,8,8,8,8,8,8,8,8])
-    matrix.append([8,8,8,8,8,8,8,8,8])
-    matrix.append([8,8,8,8,8,8,8,8,8])
-    matrix.append([9,9,9,9,9,9,9,6,9])
-    matrix.append([8,8,8,8,8,8,8,8,8])
-    matrix.append([8,8,8,8,8,8,8,8,8])
-    matrix.append([8,8,8,8,8,8,8,8,8])
-    matrix.append([8,8,8,8,8,8,8,8,8])
-    q = 0
-    lexema = ""
-    while True:
-        try:
-            p = file.tell()
-            c = file.read(1)
-        except:
-            return {'type': 'endf', 'lexema': '\0', 'position': p}
-        else:
-            if c == '?':
-                lexema += c
-                q = matrix[q][4]
-            elif c == '|':
-                lexema += c
-                q = matrix[q][3]
-            elif c == '-':
-                lexema += c
-                q = matrix[q][5]
-            elif c == '\n':
-                lexema += c
-                q = matrix[q][6]
-            elif c == '>':
-                lexema += c
-                q = matrix[q][7]
-            elif c.isspace():
-                q = matrix[q][0]
-            elif c.isupper():
-                lexema += c
-                q = matrix[q][1]
-            elif c.islower() or c.isprintable():
-                lexema += c
-                q = matrix[q][2]
-            elif c == '':
-                return {'type': 'endf', 'lexema': lexema, 'position': p}
-            else:
-                q = matrix[q][8]
+def R() -> bool:
+    global p
+    t1 = p
+    if E():
+        return True
+    p = t1
+    t1 = p
+    if U():
+        return True
+    p = t1
 
-            if q == 1: return {'type': 'n', 'lexema': lexema, 'position': p}
-            elif q == 2: return {'type': 't', 'lexema': lexema, 'position': p}
-            elif q == 3: return {'type': 'o', 'lexema': lexema, 'position': p}
-            elif q == 4: return {'type': 'e', 'lexema': lexema, 'position': p}
-            elif q == 6: return {'type': 'f', 'lexema': lexema, 'position': p}
-            elif q == 7: return {'type': 'endl', 'lexema': lexema, 'position': p}
-            elif q == 8: return {'type': 'error', 'lexema': lexema, 'position': p}
-            elif q == 9:
-                p -= 1
-                return {'type': 't', 'lexema': lexema.removesuffix(c), 'position': p}
+    return False
 
-def unget_token(token: dict):
-    global file
-    file.seek(token['position'], 0)
+def E() -> bool:
+    global p
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 'e':
+        t2 = p
+        if E():
+            return True
+        p = t2
+    p = t1
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 'e':
+        return True
+    p = t1
 
-if __name__ == "__main__": main()
+    return False
+
+def U() -> bool:
+    global p
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 's':
+        t2 = p
+        if U():
+            return True
+        p = t2
+    p = t1
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 's':
+        return True
+    p = t1
+
+    return False
+
+def A() -> bool:
+    global p
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 'c':
+        return True
+    p = t1
+    t1 = p
+    c = w[p]
+    p += 1
+    if c == 'a':
+        return True
+    p = t1
+
+    return False
+main()

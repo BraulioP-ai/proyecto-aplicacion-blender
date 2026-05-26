@@ -38,15 +38,20 @@ def encabezado():
     print("   Teoria de la Computacion - UACH")
     print("=" * 52)
     print("   Gramatica del DSL:")
-    print("     S -> T(V,A)")
-    print("     T -> m | v | l    (Montana, Valle, Llanura)")
-    print("     V -> e | s        (Extrema, Suave)")
-    print("     A -> c | a        (Con agua, Arido)")
-    print("   Ejemplo: m(e,c) = Montana Extrema Con Agua")
+    print("     S -> T(R,A)")
+    print("     T -> m | v | l | k | d  (Biomas)")
+    print("     R -> E | U              (Relieve)")
+    print("     E -> eE | e             (Extrema recursiva)")
+    print("     U -> sU | s             (Suave recursiva)")
+    print("     A -> c | a              (Con agua, Arido)")
+    print("   Ejemplo: k(ee,a) = Canones Muy Extremos Aridos")
     print("=" * 52)
     print("")
 
 def paso1_generar_parser():
+    if os.path.exists(PARSER):
+        print("[1/3] Parser ya existe, omitiendo generacion.")
+        return
     print("[1/3] Leyendo gramatica y generando parser...")
     resultado = subprocess.run(
         [PYTHON, METACOMP, GRAMATICA, PARSER],
@@ -62,10 +67,11 @@ def paso2_pedir_codigo():
     print("")
     print("[2/3] Ingresa el codigo de terreno.")
     print("      Formato : bioma(variante,agua)")
-    print("      bioma   : m=Montana  v=Valle  l=Llanura")
-    print("      variante: e/ee/eee/... o s/ss/sss/...")
+    print("      bioma   : m=Montana  v=Valle  l=Llanura  k=Canones  d=Dunas")
+    print("      relieve : e/ee/eee/... o s/ss/sss/...")
     print("      agua    : c=Con agua  a=Arido")
-    print("      Ejemplos: m(e,c)  m(eee,c)  v(ss,a)  l(s,c)")
+    print("      Nota    : k,d solo arido(a) | l solo suave(s)")
+    print("      Ejemplos: m(e,c)  v(ss,a)  l(s,c)  k(ee,a)  d(e,a)")
     print("")
     while True:
         codigo = input("    Codigo: ").strip().replace(" ", "")

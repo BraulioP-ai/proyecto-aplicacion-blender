@@ -31,7 +31,7 @@ def encontrar_blender():
     if shutil.which("blender"):
         return "blender"
         
-    # Respaldo para Windows por si tu compa lo corre allá
+    # Windows
     for ruta in BLENDER_PATHS:
         if os.path.isfile(ruta):
             return ruta
